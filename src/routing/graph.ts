@@ -253,3 +253,73 @@ export function findNearestNode(point: Point, graph: Map<string, GraphNode>): st
 
   return best;
 }
+
+/**
+ * Connect an external point (house anchor, access point, map click) to the
+ * graph by adding a new node and bidirectional connector edges to the K
+ * nearest existing nodes.  This is the CRITICAL piece that makes routing work
+ * for points that are not already on the street grid.
+ */
+export function connectPointToGraph(
+  graph: Map<string, GraphNode>,
+  point: Point,
+  nodeId: string,
+  maxDist: number = 80,
+  k: number = 3,
+): boolean {
+  const candidates: { key: string; dist: number }[] = [];
+  for (const [key, node] of graph) {
+    const d = dist(point, node.point);
+    if (d < maxDist) {
+      candidates.push({ key, dist: d });
+    }
+  }
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  if (candidates.length === 0) {
+    // Fallback: just pick the single nearest node regardless of distance
+    const nearest = findNearestNode(point, graph);
+    if (!nearest) return false;
+    candidates.push({ key: nearest, dist: dist(point, graph.get(nearest)!.point) });
+  }
+
+  // Create node
+  graph.set(nodeId, { id: nodeId, point: { ...point }, edges: [] });
+
+  const toConnect = candidates.slice(0, k);
+  for (const c of toConnect) {
+    const w = c.dist;
+    const seg: StreetSegment = {
+      id: `connector_${nodeId}`,
+      start: point,
+      end: graph.get(c.key)!.point,
+      orientation: 'd',
+    };
+
+    // Forward edge: new node -> existing node
+    const newNode = graph.get(nodeId)!;
+    if (!newNode.edges.some(e => e.to === c.key)) {
+      newNode.edges.push({ from: nodeId, to: c.key, weight: w, segment: seg, isOneWay: false });
+    }
+
+    // Reverse edge: existing node -> new node
+    const existingNode = graph.get(c.key)!;
+    if (!existingNode.edges.some(e => e.to === nodeId)) {
+      existingNode.edges.push({ from: c.key, to: nodeId, weight: w, segment: seg, isOneWay: false });
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Deep-clone a graph so we can add temporary connector nodes without
+ * mutating the base graph kept in global state.
+ */
+export function cloneGraph(base: Map<string, GraphNode>): Map<string, GraphNode> {
+  const copy = new Map<string, GraphNode>();
+  for (const [key, node] of base) {
+    copy.set(key, { ...node, edges: [...node.edges] });
+  }
+  return copy;
+}

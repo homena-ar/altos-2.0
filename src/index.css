@@ -1,15 +1,15 @@
 :root {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
-  --success: #22c55e;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --border: #475569;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --border: #e2e8f0;
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
@@ -63,7 +63,7 @@ input, select, textarea {
   padding: 0.5em 0.75em;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-tertiary);
+  background: #ffffff;
   color: var(--text-primary);
   outline: none;
   width: 100%;
@@ -83,14 +83,14 @@ input::placeholder, textarea::placeholder {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border);
+  background: #94a3b8;
 }
