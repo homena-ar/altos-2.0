@@ -4,8 +4,8 @@ export type Corner = 'NW' | 'NE' | 'SE' | 'SW';
 
 export interface HouseAnchorResult {
   point: Point;
-  side: 1 | 2;          // Which long side the house is on
-  indexOnSide: number;   // 0-based index on that side
+  side: 1 | 2;
+  indexOnSide: number;
 }
 
 export interface BlockOverride {
@@ -14,7 +14,6 @@ export interface BlockOverride {
   manualPositions?: Record<number, Point>;
 }
 
-// Houses per block from the spec
 export const housesPerBlock: Record<string, number> = {
   "3": 32, "4": 26, "5": 32, "6": 26, "7": 32, "8": 32, "9": 32, "10": 32,
   "11": 32, "12": 32, "13": 32, "14": 32,
@@ -32,7 +31,6 @@ export const housesPerBlock: Record<string, number> = {
   "99": 32,
 };
 
-// Admin overrides storage
 const blockOverrides = new Map<string, BlockOverride>();
 
 export function setBlockOverride(blockId: string, override: BlockOverride): void {
@@ -51,16 +49,10 @@ export function clearOverride(blockId: string): void {
   blockOverrides.delete(blockId);
 }
 
-/**
- * Detect whether a block is "horizontal" (wider than tall) or "vertical" (taller than wide).
- */
 function isHorizontalBlock(block: Block): boolean {
   return block.rect.width > block.rect.height;
 }
 
-/**
- * Get the four corners of a block's bounding box.
- */
 function getCorners(block: Block): Record<Corner, Point> {
   const { x, y, width, height } = block.rect;
   return {
@@ -71,15 +63,9 @@ function getCorners(block: Block): Record<Corner, Point> {
   };
 }
 
-/**
- * Determine the default start corner for a block.
- * Uses the start marker from the SVG if available, falling back to NW.
- */
 function getDefaultStartCorner(block: Block): Corner {
   const corners = getCorners(block);
   const sc = block.startCorner;
-
-  // Find which corner is closest to the start marker
   let bestCorner: Corner = 'NW';
   let bestDist = Infinity;
   for (const [c, pt] of Object.entries(corners) as [Corner, Point][]) {
@@ -93,16 +79,14 @@ function getDefaultStartCorner(block: Block): Corner {
 }
 
 /**
- * Compute the anchor point for a house number within a block.
+ * Side A (1..N1): advances along first long side from start corner.
+ * Side B (N1+1..N): opposite long side, REVERSED so B[0] is across from A[N1-1].
+ *   house N1+1 is adjacent to house N1 ("pega la vuelta").
  *
- * Houses are distributed on the two long sides of the block:
- * - Side 1: ceil(N/2) houses (house 1..N1)
- * - Side 2: floor(N/2) houses (house N1+1..N)
- *
- * @param block The block data
- * @param houseNumber The house number (1-based)
- * @param totalHouses Total houses in this block
- * @param streetOffset Pixels to offset from block edge towards the street
+ * Example N=30, start NW, horizontal:
+ *   A: 1..15 go NW -> NE (top, left to right)
+ *   B: 16..30 go SE -> SW (bottom, right to left)
+ *   house 16 is below house 15.
  */
 export function computeHouseAnchor(
   block: Block,
@@ -113,7 +97,6 @@ export function computeHouseAnchor(
   const N = totalHouses ?? housesPerBlock[block.id];
   if (!N || houseNumber < 1 || houseNumber > N) return null;
 
-  // Check for manual override
   const override = blockOverrides.get(block.id);
   if (override?.manualPositions?.[houseNumber]) {
     return {
@@ -127,55 +110,51 @@ export function computeHouseAnchor(
 
   const N1 = Math.ceil(N / 2);
   const N2 = Math.floor(N / 2);
-
   const horizontal = isHorizontalBlock(block);
   const corners = getCorners(block);
-
-  // Determine start corner
   const startCorner = override?.startCorner ?? getDefaultStartCorner(block);
 
-  // Define long sides based on orientation and start corner
+  // Side A: start -> end along first long side
+  // Side B: REVERSED opposite side (B[0] behind A[N1-1])
   let sideAStart: Point, sideAEnd: Point;
   let sideBStart: Point, sideBEnd: Point;
 
   if (horizontal) {
-    // Long sides are top and bottom
     switch (startCorner) {
       case 'NW':
-        sideAStart = corners.NW; sideAEnd = corners.NE;   // top left -> right
-        sideBStart = corners.SW; sideBEnd = corners.SE;     // bottom left -> right (return)
+        sideAStart = corners.NW; sideAEnd = corners.NE;
+        sideBStart = corners.SE; sideBEnd = corners.SW; // reversed!
         break;
       case 'NE':
-        sideAStart = corners.NE; sideAEnd = corners.NW;   // top right -> left
-        sideBStart = corners.SE; sideBEnd = corners.SW;
+        sideAStart = corners.NE; sideAEnd = corners.NW;
+        sideBStart = corners.SW; sideBEnd = corners.SE;
         break;
       case 'SE':
-        sideAStart = corners.SE; sideAEnd = corners.SW;   // bottom right -> left
-        sideBStart = corners.NE; sideBEnd = corners.NW;
+        sideAStart = corners.SE; sideAEnd = corners.SW;
+        sideBStart = corners.NW; sideBEnd = corners.NE;
         break;
       case 'SW':
-        sideAStart = corners.SW; sideAEnd = corners.SE;   // bottom left -> right
-        sideBStart = corners.NW; sideBEnd = corners.NE;
+        sideAStart = corners.SW; sideAEnd = corners.SE;
+        sideBStart = corners.NE; sideBEnd = corners.NW;
         break;
     }
   } else {
-    // Vertical block: long sides are left and right
     switch (startCorner) {
       case 'NW':
-        sideAStart = corners.NW; sideAEnd = corners.SW;   // left top -> bottom
-        sideBStart = corners.NE; sideBEnd = corners.SE;
+        sideAStart = corners.NW; sideAEnd = corners.SW;
+        sideBStart = corners.SE; sideBEnd = corners.NE;
         break;
       case 'NE':
-        sideAStart = corners.NE; sideAEnd = corners.SE;   // right top -> bottom
-        sideBStart = corners.NW; sideBEnd = corners.SW;
-        break;
-      case 'SE':
-        sideAStart = corners.SE; sideAEnd = corners.NE;   // right bottom -> top
+        sideAStart = corners.NE; sideAEnd = corners.SE;
         sideBStart = corners.SW; sideBEnd = corners.NW;
         break;
+      case 'SE':
+        sideAStart = corners.SE; sideAEnd = corners.NE;
+        sideBStart = corners.NW; sideBEnd = corners.SW;
+        break;
       case 'SW':
-        sideAStart = corners.SW; sideAEnd = corners.NW;   // left bottom -> top
-        sideBStart = corners.SE; sideBEnd = corners.NE;
+        sideAStart = corners.SW; sideAEnd = corners.NW;
+        sideBStart = corners.NE; sideBEnd = corners.SE;
         break;
     }
   }
@@ -185,35 +164,26 @@ export function computeHouseAnchor(
   let indexOnSide: number;
 
   if (houseNumber <= N1) {
-    // Side A
     side = 1;
     indexOnSide = houseNumber - 1;
     const t = N1 > 1 ? indexOnSide / (N1 - 1) : 0.5;
     const baseX = sideAStart!.x + (sideAEnd!.x - sideAStart!.x) * t;
     const baseY = sideAStart!.y + (sideAEnd!.y - sideAStart!.y) * t;
-
-    // Offset towards street (away from block center)
-    const cx = block.center.x;
-    const cy = block.center.y;
-    const dx = baseX - cx;
-    const dy = baseY - cy;
+    const cx = block.center.x, cy = block.center.y;
+    const dx = baseX - cx, dy = baseY - cy;
     const len = Math.sqrt(dx * dx + dy * dy);
     point = {
       x: baseX + (len > 0 ? (dx / len) * streetOffset : 0),
       y: baseY + (len > 0 ? (dy / len) * streetOffset : 0),
     };
   } else {
-    // Side B
     side = 2;
     indexOnSide = houseNumber - N1 - 1;
     const t = N2 > 1 ? indexOnSide / (N2 - 1) : 0.5;
     const baseX = sideBStart!.x + (sideBEnd!.x - sideBStart!.x) * t;
     const baseY = sideBStart!.y + (sideBEnd!.y - sideBStart!.y) * t;
-
-    const cx = block.center.x;
-    const cy = block.center.y;
-    const dx = baseX - cx;
-    const dy = baseY - cy;
+    const cx = block.center.x, cy = block.center.y;
+    const dx = baseX - cx, dy = baseY - cy;
     const len = Math.sqrt(dx * dx + dy * dy);
     point = {
       x: baseX + (len > 0 ? (dx / len) * streetOffset : 0),
@@ -224,18 +194,12 @@ export function computeHouseAnchor(
   return { point, side, indexOnSide };
 }
 
-/**
- * Validate that a house number is valid for a given block.
- */
 export function isValidHouse(blockId: string, houseNumber: number): boolean {
   const n = housesPerBlock[blockId];
   if (!n) return false;
   return houseNumber >= 1 && houseNumber <= n;
 }
 
-/**
- * Get houses count for a block, or 0 if unknown.
- */
 export function getHouseCount(blockId: string): number {
   return housesPerBlock[blockId] || 0;
 }

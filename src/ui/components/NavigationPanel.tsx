@@ -3,11 +3,17 @@ import { useStore } from '../../data/store';
 import { housesPerBlock, isValidHouse } from '../../houseNumbering';
 import type { OriginType } from '../../data/store';
 
+const originLabels: Record<OriginType, string> = {
+  marquez: 'Av. Marquez',
+  florida: 'Florida',
+  gps: 'Mi ubicacion',
+};
+
 export function NavigationPanel() {
   const {
     origin, setOrigin, destinationBlock, destinationHouse,
-    setDestination, route, isNavigating, setIsNavigating,
-    setAnimationProgress,
+    setDestination, route, routeError, isNavigating, setIsNavigating,
+    setAnimationProgress, resetRoute,
   } = useStore();
 
   const [blockInput, setBlockInput] = useState(destinationBlock);
@@ -57,9 +63,24 @@ export function NavigationPanel() {
     }
   };
 
+  const handleReset = () => {
+    setBlockInput('');
+    setHouseInput('');
+    setBlockError('');
+    setHouseError('');
+    resetRoute();
+  };
+
   return (
     <div className="panel navigation-panel">
-      <h2>Navegacion</h2>
+      <div className="panel-header">
+        <h2>Navegacion</h2>
+        {(destinationBlock || route) && (
+          <button className="btn-small" onClick={handleReset}>
+            Reiniciar
+          </button>
+        )}
+      </div>
 
       {/* Origin selector */}
       <div className="field">
@@ -124,9 +145,22 @@ export function NavigationPanel() {
         Calcular Ruta
       </button>
 
+      {/* Route error */}
+      {routeError && !route && (
+        <div className="route-error">
+          {routeError}
+        </div>
+      )}
+
       {/* Route info */}
       {route && (
         <div className="route-info">
+          {/* Origin → Destination summary */}
+          <div className="route-summary">
+            {originLabels[origin]} → Manzana {destinationBlock}
+            {destinationHouse ? `, Casa ${destinationHouse}` : ''}
+          </div>
+
           <div className="route-stats">
             <span>Distancia: ~{Math.round(route.totalDistance)}m</span>
             <span>Pasos: {route.instructions.length}</span>
