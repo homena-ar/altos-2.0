@@ -124,6 +124,41 @@ export function parseSVGMap(svgText: string): MapData {
     });
   });
 
+  // Parse green rectangle lanes from greens_horizontal, greens_vertical, greens_between.
+  // These rects represent real traffic lanes. We extract their center line as street segments.
+  const greenGroups = ['greens_horizontal', 'greens_vertical', 'greens_between'];
+  greenGroups.forEach(groupId => {
+    const group = doc.getElementById(groupId);
+    if (!group) return;
+    const rects = group.querySelectorAll('rect');
+    rects.forEach((rect, idx) => {
+      const x = parseFloat(rect.getAttribute('x') || '0');
+      const y = parseFloat(rect.getAttribute('y') || '0');
+      const w = parseFloat(rect.getAttribute('width') || '0');
+      const h = parseFloat(rect.getAttribute('height') || '0');
+
+      const isHorizontal = w > h;
+      const centerX = x + w / 2;
+      const centerY = y + h / 2;
+
+      let start: Point, end: Point;
+      if (isHorizontal) {
+        start = { x, y: centerY };
+        end = { x: x + w, y: centerY };
+      } else {
+        start = { x: centerX, y };
+        end = { x: centerX, y: y + h };
+      }
+
+      streets.push({
+        id: `green_${groupId}_${idx}`,
+        start,
+        end,
+        orientation: isHorizontal ? 'h' : 'v',
+      });
+    });
+  });
+
   // Parse one-way lanes
   const lanePaths = doc.querySelectorAll('path[data-type="oneway"]');
   lanePaths.forEach(path => {

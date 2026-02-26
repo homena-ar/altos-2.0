@@ -6,7 +6,7 @@ import type { Commerce } from './types';
 import type { BlockOverride } from '../houseNumbering';
 import { mockCommerces } from './mockCommerces';
 
-export type OriginType = 'marquez' | 'florida' | 'gps';
+export type OriginType = 'marquez' | 'florida' | 'gps' | 'block_house' | 'map_click';
 
 export interface AppState {
   // Map data
@@ -18,6 +18,8 @@ export interface AppState {
   // Navigation
   origin: OriginType;
   originPoint: Point | null;
+  originBlock: string;
+  originHouse: number | null;
   destinationBlock: string;
   destinationHouse: number | null;
   destinationCommerce: string | null;
@@ -26,6 +28,11 @@ export interface AppState {
   routeError: string | null;
   isNavigating: boolean;
   animationProgress: number;
+
+  // Map click
+  clickMode: 'origin' | 'destination' | null;
+  mapClickOrigin: Point | null;
+  mapClickDest: Point | null;
 
   // GPS
   userPosition: Point | null;
@@ -51,6 +58,7 @@ export interface AppState {
   setSvgContent: (svg: string) => void;
   setOrigin: (origin: OriginType) => void;
   setOriginPoint: (point: Point | null) => void;
+  setOriginBlockHouse: (block: string, house: number | null) => void;
   setDestination: (blockId: string, houseNumber: number | null) => void;
   setDestinationCommerce: (commerceId: string | null) => void;
   setDestinationPoint: (point: Point | null) => void;
@@ -58,6 +66,9 @@ export interface AppState {
   setRouteError: (error: string | null) => void;
   setIsNavigating: (val: boolean) => void;
   setAnimationProgress: (val: number) => void;
+  setClickMode: (mode: 'origin' | 'destination' | null) => void;
+  setMapClickOrigin: (point: Point | null) => void;
+  setMapClickDest: (point: Point | null) => void;
   setUserPosition: (pos: Point | null) => void;
   setIsInsidePerimeter: (val: boolean) => void;
   addCommerce: (commerce: Commerce) => void;
@@ -81,6 +92,8 @@ export const useStore = create<AppState>((set) => ({
   mapLoaded: false,
   origin: 'marquez',
   originPoint: null,
+  originBlock: '',
+  originHouse: null,
   destinationBlock: '',
   destinationHouse: null,
   destinationCommerce: null,
@@ -89,6 +102,9 @@ export const useStore = create<AppState>((set) => ({
   routeError: null,
   isNavigating: false,
   animationProgress: 0,
+  clickMode: null,
+  mapClickOrigin: null,
+  mapClickDest: null,
   userPosition: null,
   isInsidePerimeter: false,
   commerces: mockCommerces,
@@ -106,6 +122,7 @@ export const useStore = create<AppState>((set) => ({
   setSvgContent: (svg) => set({ svgContent: svg }),
   setOrigin: (origin) => set({ origin }),
   setOriginPoint: (point) => set({ originPoint: point }),
+  setOriginBlockHouse: (block, house) => set({ originBlock: block, originHouse: house }),
   setDestination: (blockId, houseNumber) => set({
     destinationBlock: blockId,
     destinationHouse: houseNumber,
@@ -117,6 +134,9 @@ export const useStore = create<AppState>((set) => ({
   setRouteError: (error) => set({ routeError: error }),
   setIsNavigating: (val) => set({ isNavigating: val, animationProgress: 0 }),
   setAnimationProgress: (val) => set({ animationProgress: val }),
+  setClickMode: (mode) => set({ clickMode: mode }),
+  setMapClickOrigin: (point) => set({ mapClickOrigin: point }),
+  setMapClickDest: (point) => set({ mapClickDest: point }),
   setUserPosition: (pos) => set({ userPosition: pos }),
   setIsInsidePerimeter: (val) => set({ isInsidePerimeter: val }),
   addCommerce: (commerce) => set((s) => ({ commerces: [...s.commerces, commerce] })),
@@ -146,5 +166,8 @@ export const useStore = create<AppState>((set) => ({
     routeError: null,
     isNavigating: false,
     animationProgress: 0,
+    clickMode: null,
+    mapClickOrigin: null,
+    mapClickDest: null,
   }),
 }));

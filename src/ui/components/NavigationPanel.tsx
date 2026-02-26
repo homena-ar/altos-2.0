@@ -7,6 +7,8 @@ const originLabels: Record<OriginType, string> = {
   marquez: 'Av. Marquez',
   florida: 'Florida',
   gps: 'Mi ubicacion',
+  block_house: 'Manzana',
+  map_click: 'Click mapa',
 };
 
 export function NavigationPanel() {
@@ -14,12 +16,17 @@ export function NavigationPanel() {
     origin, setOrigin, destinationBlock, destinationHouse,
     setDestination, route, routeError, isNavigating, setIsNavigating,
     setAnimationProgress, resetRoute,
+    setOriginBlockHouse, setClickMode,
   } = useStore();
 
   const [blockInput, setBlockInput] = useState(destinationBlock);
   const [houseInput, setHouseInput] = useState(destinationHouse?.toString() || '');
   const [blockError, setBlockError] = useState('');
   const [houseError, setHouseError] = useState('');
+
+  // Origin block/house for block_house mode
+  const [origBlockInput, setOrigBlockInput] = useState('');
+  const [origHouseInput, setOrigHouseInput] = useState('');
 
   const availableBlocks = useMemo(() => Object.keys(housesPerBlock).sort((a, b) => Number(a) - Number(b)), []);
 
@@ -29,6 +36,7 @@ export function NavigationPanel() {
   }, [blockInput, availableBlocks]);
 
   const maxHouses = blockInput && housesPerBlock[blockInput] ? housesPerBlock[blockInput] : 0;
+  const origMaxHouses = origBlockInput && housesPerBlock[origBlockInput] ? housesPerBlock[origBlockInput] : 0;
 
   const handleBlockChange = (val: string) => {
     setBlockInput(val);
@@ -68,7 +76,16 @@ export function NavigationPanel() {
     setHouseInput('');
     setBlockError('');
     setHouseError('');
+    setOrigBlockInput('');
+    setOrigHouseInput('');
     resetRoute();
+  };
+
+  const handleOriginBlockHouse = () => {
+    if (!origBlockInput || !housesPerBlock[origBlockInput]) return;
+    const num = origHouseInput ? parseInt(origHouseInput, 10) : null;
+    setOriginBlockHouse(origBlockInput, num);
+    setOrigin('block_house');
   };
 
   return (
@@ -87,14 +104,22 @@ export function NavigationPanel() {
         <label>Desde:</label>
         <div className="origin-buttons">
           {([
-            ['marquez', 'Av. Marquez'],
+            ['marquez', 'Marquez'],
             ['florida', 'Florida'],
-            ['gps', 'Mi ubicacion'],
+            ['gps', 'GPS'],
+            ['block_house', 'Mz+Casa'],
+            ['map_click', 'Mapa'],
           ] as [OriginType, string][]).map(([key, label]) => (
             <button
               key={key}
               className={`origin-btn ${origin === key ? 'active' : ''}`}
-              onClick={() => setOrigin(key)}
+              onClick={() => {
+                if (key === 'map_click') {
+                  setClickMode('origin');
+                } else {
+                  setOrigin(key);
+                }
+              }}
             >
               {label}
             </button>
@@ -102,48 +127,102 @@ export function NavigationPanel() {
         </div>
       </div>
 
-      {/* Destination input */}
+      {/* Origin block+house sub-form */}
+      {origin === 'block_house' && (
+        <div className="origin-block-house-form">
+          <div className="field-row">
+            <div className="field">
+              <label>Manzana origen:</label>
+              <input
+                type="text"
+                value={origBlockInput}
+                onChange={e => setOrigBlockInput(e.target.value)}
+                placeholder="Ej: 24"
+                list="orig-blocks-list"
+              />
+              <datalist id="orig-blocks-list">
+                {availableBlocks.map(b => (
+                  <option key={b} value={b}>Mz {b}</option>
+                ))}
+              </datalist>
+            </div>
+            <div className="field">
+              <label>Casa origen:</label>
+              <input
+                type="number"
+                min={1}
+                max={origMaxHouses}
+                value={origHouseInput}
+                onChange={e => setOrigHouseInput(e.target.value)}
+                placeholder={origMaxHouses ? `1-${origMaxHouses}` : '-'}
+                disabled={!origBlockInput || !housesPerBlock[origBlockInput]}
+              />
+            </div>
+          </div>
+          <button
+            className="btn-secondary"
+            onClick={handleOriginBlockHouse}
+            disabled={!origBlockInput || !housesPerBlock[origBlockInput]}
+            style={{ marginBottom: '0.5rem' }}
+          >
+            Fijar origen
+          </button>
+        </div>
+      )}
+
+      {/* Destination */}
       <div className="field">
-        <label>Manzana:</label>
-        <div className="input-with-autocomplete">
-          <input
-            type="text"
-            value={blockInput}
-            onChange={(e) => handleBlockChange(e.target.value)}
-            placeholder="Ej: 44"
-            list="blocks-list"
-          />
-          <datalist id="blocks-list">
-            {filteredBlocks.map(b => (
-              <option key={b} value={b}>Manzana {b} ({housesPerBlock[b]} casas)</option>
-            ))}
-          </datalist>
+        <label>Destino - Manzana:</label>
+        <div className="field-row">
+          <div className="field" style={{ flex: 2 }}>
+            <input
+              type="text"
+              value={blockInput}
+              onChange={(e) => handleBlockChange(e.target.value)}
+              placeholder="Ej: 29"
+              list="blocks-list"
+            />
+            <datalist id="blocks-list">
+              {filteredBlocks.map(b => (
+                <option key={b} value={b}>Manzana {b} ({housesPerBlock[b]} casas)</option>
+              ))}
+            </datalist>
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <input
+              type="number"
+              min={1}
+              max={maxHouses}
+              value={houseInput}
+              onChange={(e) => handleHouseChange(e.target.value)}
+              placeholder={maxHouses ? `Casa` : '-'}
+              disabled={!blockInput || !!blockError}
+            />
+          </div>
         </div>
         {blockError && <span className="error">{blockError}</span>}
-        {maxHouses > 0 && <span className="hint">{maxHouses} casas</span>}
-      </div>
-
-      <div className="field">
-        <label>Casa:</label>
-        <input
-          type="number"
-          min={1}
-          max={maxHouses}
-          value={houseInput}
-          onChange={(e) => handleHouseChange(e.target.value)}
-          placeholder={maxHouses ? `1-${maxHouses}` : 'Selecciona manzana'}
-          disabled={!blockInput || !!blockError}
-        />
         {houseError && <span className="error">{houseError}</span>}
+        {maxHouses > 0 && !blockError && <span className="hint">{maxHouses} casas en Mz {blockInput}</span>}
       </div>
 
-      <button
-        className="btn-primary"
-        onClick={handleNavigate}
-        disabled={!blockInput || !!blockError || (!!houseInput && !!houseError)}
-      >
-        Calcular Ruta
-      </button>
+      <div className="field-row" style={{ marginBottom: '0.5rem' }}>
+        <button
+          className="btn-primary"
+          onClick={handleNavigate}
+          disabled={!blockInput || !!blockError || (!!houseInput && !!houseError)}
+          style={{ flex: 2 }}
+        >
+          Calcular Ruta
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => setClickMode('destination')}
+          style={{ flex: 1 }}
+          title="Seleccionar destino en el mapa"
+        >
+          Click mapa
+        </button>
+      </div>
 
       {/* Route error */}
       {routeError && !route && (
@@ -157,7 +236,7 @@ export function NavigationPanel() {
         <div className="route-info">
           {/* Origin → Destination summary */}
           <div className="route-summary">
-            {originLabels[origin]} → Manzana {destinationBlock}
+            {originLabels[origin]} &rarr; Manzana {destinationBlock}
             {destinationHouse ? `, Casa ${destinationHouse}` : ''}
           </div>
 

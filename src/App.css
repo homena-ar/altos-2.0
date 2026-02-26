@@ -12,10 +12,11 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  background: var(--bg-secondary);
+  background: #ffffff;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 10;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .app-header h1 {
@@ -57,10 +58,11 @@
   max-width: 400px;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
+  background: #ffffff;
   border-right: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 5;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
 }
 
 .sidebar-tabs {
@@ -107,12 +109,39 @@
   height: 100%;
   overflow: hidden;
   cursor: grab;
-  background: #1a2332;
+  background: #e8eef5;
   position: relative;
 }
 
 .map-container:active {
   cursor: grabbing;
+}
+
+.map-container.click-mode {
+  cursor: crosshair;
+}
+
+.click-mode-banner {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: white;
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.click-mode-banner .btn-small {
+  background: rgba(255,255,255,0.2);
+  color: white;
 }
 
 .map-container svg {
@@ -160,11 +189,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: #ffffff;
   color: var(--text-primary);
   border: 1px solid var(--border);
   font-size: 1rem;
   font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .zoom-controls button:hover {
@@ -372,7 +402,7 @@
 .route-error {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(239, 68, 68, 0.1);
+  background: #fef2f2;
   border: 1px solid var(--danger);
   border-radius: 6px;
   color: var(--danger);
@@ -412,7 +442,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--border);
   font-size: 0.8rem;
 }
 
@@ -526,8 +556,8 @@
 .tag {
   padding: 0.15rem 0.4rem;
   font-size: 0.65rem;
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  background: #dbeafe;
+  color: #1d4ed8;
   border-radius: 4px;
 }
 
@@ -545,7 +575,14 @@
 }
 
 .search-input {
-  background: var(--bg-primary);
+  background: #ffffff;
+}
+
+.origin-block-house-form {
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
 }
 
 /* ======= Admin Panel ======= */

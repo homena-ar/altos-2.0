@@ -11,6 +11,7 @@ export function DebugOverlay({ graph, mapData }: Props) {
   const [showNodes, setShowNodes] = useState(true);
   const [showEdges, setShowEdges] = useState(true);
   const [showLanes, setShowLanes] = useState(true);
+  const [showConnectors, setShowConnectors] = useState(true);
 
   const nodes = Array.from(graph.values());
   const edgeCount = nodes.reduce((s, n) => s + n.edges.length, 0);
@@ -18,47 +19,38 @@ export function DebugOverlay({ graph, mapData }: Props) {
   return (
     <g className="debug-overlay">
       {/* Toggle controls rendered as SVG foreignObject */}
-      <foreignObject x={5} y={5} width={200} height={90}>
+      <foreignObject x={5} y={5} width={200} height={105}>
         <div
           style={{
-            background: 'rgba(15,23,42,0.85)',
+            background: 'rgba(255,255,255,0.92)',
             padding: '4px 8px',
-            borderRadius: '4px',
+            borderRadius: '6px',
             fontSize: '7px',
             fontFamily: 'monospace',
-            color: '#94a3b8',
+            color: '#334155',
             pointerEvents: 'auto',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           }}
         >
           <div style={{ marginBottom: '2px', color: '#6366f1', fontWeight: 'bold' }}>
             Nodos: {nodes.length} | Aristas: {edgeCount}
           </div>
           <label style={{ display: 'block', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={showEdges}
-              onChange={(e) => setShowEdges(e.target.checked)}
-              style={{ marginRight: '4px' }}
-            />
+            <input type="checkbox" checked={showEdges} onChange={(e) => setShowEdges(e.target.checked)} style={{ marginRight: '4px' }} />
             Aristas
           </label>
           <label style={{ display: 'block', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={showNodes}
-              onChange={(e) => setShowNodes(e.target.checked)}
-              style={{ marginRight: '4px' }}
-            />
+            <input type="checkbox" checked={showNodes} onChange={(e) => setShowNodes(e.target.checked)} style={{ marginRight: '4px' }} />
             Nodos
           </label>
           <label style={{ display: 'block', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={showLanes}
-              onChange={(e) => setShowLanes(e.target.checked)}
-              style={{ marginRight: '4px' }}
-            />
+            <input type="checkbox" checked={showLanes} onChange={(e) => setShowLanes(e.target.checked)} style={{ marginRight: '4px' }} />
             Carriles
+          </label>
+          <label style={{ display: 'block', cursor: 'pointer' }}>
+            <input type="checkbox" checked={showConnectors} onChange={(e) => setShowConnectors(e.target.checked)} style={{ marginRight: '4px' }} />
+            Connectors casa&rarr;calle
           </label>
         </div>
       </foreignObject>
@@ -68,6 +60,8 @@ export function DebugOverlay({ graph, mapData }: Props) {
         node.edges.map(edge => {
           const to = graph.get(edge.to);
           if (!to) return null;
+          const isConnector = edge.segment?.id.startsWith('connector_');
+          if (isConnector && !showConnectors) return null;
           return (
             <g key={`${edge.from}-${edge.to}`}>
               <line
@@ -75,16 +69,13 @@ export function DebugOverlay({ graph, mapData }: Props) {
                 y1={node.point.y}
                 x2={to.point.x}
                 y2={to.point.y}
-                stroke={edge.isOneWay ? '#f97316' : '#6366f1'}
-                strokeWidth={0.6}
+                stroke={isConnector ? '#ec4899' : edge.isOneWay ? '#f97316' : '#6366f1'}
+                strokeWidth={isConnector ? 0.8 : 0.6}
                 opacity={0.6}
+                strokeDasharray={isConnector ? '2,1' : undefined}
               />
-              {edge.isOneWay && (
-                <ArrowHead
-                  from={node.point}
-                  to={to.point}
-                  color="#f97316"
-                />
+              {edge.isOneWay && !isConnector && (
+                <ArrowHead from={node.point} to={to.point} color="#f97316" />
               )}
             </g>
           );
@@ -98,7 +89,7 @@ export function DebugOverlay({ graph, mapData }: Props) {
           cx={node.point.x}
           cy={node.point.y}
           r={1.2}
-          fill="#6366f1"
+          fill={node.id.startsWith('__') ? '#ec4899' : '#6366f1'}
           opacity={0.8}
         />
       ))}
