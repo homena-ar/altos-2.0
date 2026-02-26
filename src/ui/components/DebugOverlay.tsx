@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { GraphNode } from '../../routing/graph';
 import type { MapData } from '../../map/types';
 
@@ -7,12 +8,63 @@ interface Props {
 }
 
 export function DebugOverlay({ graph, mapData }: Props) {
+  const [showNodes, setShowNodes] = useState(true);
+  const [showEdges, setShowEdges] = useState(true);
+  const [showLanes, setShowLanes] = useState(true);
+
   const nodes = Array.from(graph.values());
+  const edgeCount = nodes.reduce((s, n) => s + n.edges.length, 0);
 
   return (
     <g className="debug-overlay">
+      {/* Toggle controls rendered as SVG foreignObject */}
+      <foreignObject x={5} y={5} width={200} height={90}>
+        <div
+          style={{
+            background: 'rgba(15,23,42,0.85)',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '7px',
+            fontFamily: 'monospace',
+            color: '#94a3b8',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div style={{ marginBottom: '2px', color: '#6366f1', fontWeight: 'bold' }}>
+            Nodos: {nodes.length} | Aristas: {edgeCount}
+          </div>
+          <label style={{ display: 'block', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showEdges}
+              onChange={(e) => setShowEdges(e.target.checked)}
+              style={{ marginRight: '4px' }}
+            />
+            Aristas
+          </label>
+          <label style={{ display: 'block', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showNodes}
+              onChange={(e) => setShowNodes(e.target.checked)}
+              style={{ marginRight: '4px' }}
+            />
+            Nodos
+          </label>
+          <label style={{ display: 'block', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={showLanes}
+              onChange={(e) => setShowLanes(e.target.checked)}
+              style={{ marginRight: '4px' }}
+            />
+            Carriles
+          </label>
+        </div>
+      </foreignObject>
+
       {/* Draw edges */}
-      {nodes.map(node =>
+      {showEdges && nodes.map(node =>
         node.edges.map(edge => {
           const to = graph.get(edge.to);
           if (!to) return null;
@@ -27,7 +79,6 @@ export function DebugOverlay({ graph, mapData }: Props) {
                 strokeWidth={0.6}
                 opacity={0.6}
               />
-              {/* Arrow for one-way */}
               {edge.isOneWay && (
                 <ArrowHead
                   from={node.point}
@@ -41,7 +92,7 @@ export function DebugOverlay({ graph, mapData }: Props) {
       )}
 
       {/* Draw nodes */}
-      {nodes.map(node => (
+      {showNodes && nodes.map(node => (
         <circle
           key={node.id}
           cx={node.point.x}
@@ -53,7 +104,7 @@ export function DebugOverlay({ graph, mapData }: Props) {
       ))}
 
       {/* Draw one-way lanes from SVG */}
-      {mapData.oneWayLanes.map(lane => (
+      {showLanes && mapData.oneWayLanes.map(lane => (
         <line
           key={lane.id}
           x1={lane.start.x}
@@ -66,11 +117,6 @@ export function DebugOverlay({ graph, mapData }: Props) {
           strokeDasharray="3,2"
         />
       ))}
-
-      {/* Node count label */}
-      <text x={10} y={15} fontSize={8} fill="#6366f1" fontFamily="monospace">
-        Nodos: {nodes.length} | Aristas: {nodes.reduce((s, n) => s + n.edges.length, 0)}
-      </text>
     </g>
   );
 }

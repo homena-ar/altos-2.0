@@ -23,6 +23,7 @@ export interface AppState {
   destinationCommerce: string | null;
   destinationPoint: Point | null;
   route: RouteResult | null;
+  routeError: string | null;
   isNavigating: boolean;
   animationProgress: number;
 
@@ -54,6 +55,7 @@ export interface AppState {
   setDestinationCommerce: (commerceId: string | null) => void;
   setDestinationPoint: (point: Point | null) => void;
   setRoute: (route: RouteResult | null) => void;
+  setRouteError: (error: string | null) => void;
   setIsNavigating: (val: boolean) => void;
   setAnimationProgress: (val: number) => void;
   setUserPosition: (pos: Point | null) => void;
@@ -68,6 +70,7 @@ export interface AppState {
   setIsAdminOpen: (val: boolean) => void;
   setDebugMode: (val: boolean) => void;
   setActivePanel: (panel: 'nav' | 'commerce' | 'admin' | null) => void;
+  resetRoute: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -83,6 +86,7 @@ export const useStore = create<AppState>((set) => ({
   destinationCommerce: null,
   destinationPoint: null,
   route: null,
+  routeError: null,
   isNavigating: false,
   animationProgress: 0,
   userPosition: null,
@@ -110,6 +114,7 @@ export const useStore = create<AppState>((set) => ({
   setDestinationCommerce: (commerceId) => set({ destinationCommerce: commerceId }),
   setDestinationPoint: (point) => set({ destinationPoint: point }),
   setRoute: (route) => set({ route }),
+  setRouteError: (error) => set({ routeError: error }),
   setIsNavigating: (val) => set({ isNavigating: val, animationProgress: 0 }),
   setAnimationProgress: (val) => set({ animationProgress: val }),
   setUserPosition: (pos) => set({ userPosition: pos }),
@@ -132,4 +137,14 @@ export const useStore = create<AppState>((set) => ({
   setIsAdminOpen: (val) => set({ isAdminOpen: val }),
   setDebugMode: (val) => set({ debugMode: val }),
   setActivePanel: (panel) => set({ activePanel: panel }),
+  resetRoute: () => set({
+    destinationBlock: '',
+    destinationHouse: null,
+    destinationCommerce: null,
+    destinationPoint: null,
+    route: null,
+    routeError: null,
+    isNavigating: false,
+    animationProgress: 0,
+  }),
 }));

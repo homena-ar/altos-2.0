@@ -115,26 +115,8 @@
   cursor: grabbing;
 }
 
-.map-svg-wrapper {
-  position: relative;
-  width: 573.2px;
-  height: 704.1px;
-  will-change: transform;
-}
-
-.map-svg {
-  width: 100%;
-  height: 100%;
-}
-
-.map-svg svg {
-  width: 100%;
-  height: 100%;
+.map-container svg {
   display: block;
-}
-
-.map-overlay-svg {
-  pointer-events: none;
 }
 
 .map-loading {
@@ -386,11 +368,29 @@
   color: white;
 }
 
+/* ======= Route Error ======= */
+.route-error {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+
 /* ======= Route Info ======= */
 .route-info {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
+}
+
+.route-summary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
 }
 
 .route-stats {

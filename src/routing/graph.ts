@@ -14,7 +14,7 @@ export interface GraphEdge {
   isOneWay: boolean;
 }
 
-const SNAP_TOLERANCE = 8; // pixels tolerance for connecting streets
+const SNAP_TOLERANCE = 8;
 
 function pointKey(p: Point): string {
   return `${Math.round(p.x * 10) / 10},${Math.round(p.y * 10) / 10}`;
@@ -38,7 +38,6 @@ function snapPoint(p: Point, nodeMap: Map<string, GraphNode>): string | null {
 }
 
 function getOrCreateNode(p: Point, nodeMap: Map<string, GraphNode>): string {
-  // Try to snap to existing node
   const existing = snapPoint(p, nodeMap);
   if (existing) return existing;
 
@@ -49,7 +48,6 @@ function getOrCreateNode(p: Point, nodeMap: Map<string, GraphNode>): string {
   return key;
 }
 
-// Check if a point is on a segment (with tolerance)
 function isPointOnSegment(p: Point, seg: { start: Point; end: Point }, tolerance: number = 4): boolean {
   const d1 = dist(p, seg.start);
   const d2 = dist(p, seg.end);
@@ -57,39 +55,44 @@ function isPointOnSegment(p: Point, seg: { start: Point; end: Point }, tolerance
   return Math.abs(d1 + d2 - segLen) < tolerance;
 }
 
-// Determine one-way constraints from the lane data
-function getOneWayConstraints(mapData: MapData): Map<string, { direction: Point }> {
-  const constraints = new Map<string, { direction: Point }>();
-
-  mapData.oneWayLanes.forEach(lane => {
-    // The direction vector tells us which way traffic flows
-    let dir: Point;
-    switch (lane.direction) {
-      case '+x': dir = { x: 1, y: 0 }; break;
-      case '-x': dir = { x: -1, y: 0 }; break;
-      case '+y': dir = { x: 0, y: 1 }; break;
-      case '-y': dir = { x: 0, y: -1 }; break;
-      default: dir = { x: 1, y: 0 };
-    }
-    constraints.set(lane.id, { direction: dir });
-  });
-
-  return constraints;
+/** Convert a OneWayLane to a StreetSegment for graph building */
+function laneToSegment(lane: OneWayLane): StreetSegment {
+  return {
+    id: lane.id,
+    start: lane.start,
+    end: lane.end,
+    orientation: lane.orientation === 'h' ? 'h' : 'v',
+  };
 }
 
-// Check if a street segment is affected by a one-way lane
-function findOneWayForSegment(
-  seg: StreetSegment,
-  lanes: OneWayLane[]
-): OneWayLane | null {
+/** Get the unit direction vector for a one-way lane */
+function getOneWayDir(lane: OneWayLane): Point {
+  switch (lane.direction) {
+    case '+x': return { x: 1, y: 0 };
+    case '-x': return { x: -1, y: 0 };
+    case '+y': return { x: 0, y: 1 };
+    case '-y': return { x: 0, y: -1 };
+    default: return { x: 1, y: 0 };
+  }
+}
+
+/** Check if a street segment IS one of the one-way lanes (by id) */
+function isExplicitLane(seg: StreetSegment, lanes: OneWayLane[]): OneWayLane | null {
   for (const lane of lanes) {
-    // Check if segment overlaps with lane
+    if (seg.id === lane.id) return lane;
+  }
+  return null;
+}
+
+/** Check if a street segment overlaps with a one-way lane (by geometry) */
+function findOverlappingLane(seg: StreetSegment, lanes: OneWayLane[]): OneWayLane | null {
+  for (const lane of lanes) {
+    if (seg.orientation !== lane.orientation) continue;
     const segMid = {
       x: (seg.start.x + seg.end.x) / 2,
       y: (seg.start.y + seg.end.y) / 2,
     };
-
-    if (seg.orientation === lane.orientation && isPointOnSegment(segMid, lane, 12)) {
+    if (isPointOnSegment(segMid, lane, 12)) {
       return lane;
     }
   }
@@ -98,11 +101,14 @@ function findOneWayForSegment(
 
 export function buildGraph(mapData: MapData): Map<string, GraphNode> {
   const nodeMap = new Map<string, GraphNode>();
-  void getOneWayConstraints(mapData);
 
-  // First pass: create nodes from all street endpoints
-  const segments = [...mapData.streets];
+  // Merge regular streets AND one-way lanes into the segment list.
+  // One-way lanes (st_merge_*) ARE actual streets (the main boulevard)
+  // that have no corresponding st_0### paths in the SVG.
+  const laneSegments = mapData.oneWayLanes.map(laneToSegment);
+  const segments: StreetSegment[] = [...mapData.streets, ...laneSegments];
 
+  // First pass: create nodes from all segment endpoints
   segments.forEach(seg => {
     getOrCreateNode(seg.start, nodeMap);
     getOrCreateNode(seg.end, nodeMap);
@@ -141,18 +147,20 @@ export function buildGraph(mapData: MapData): Map<string, GraphNode> {
       }
     }
 
-    // Sort by parameter along segment
     nodesOnSeg.sort((a, b) => a.t - b.t);
 
-    // Create chain of edges
     const chain = [
       { key: startKey, t: 0 },
       ...nodesOnSeg,
       { key: endKey, t: 1 },
     ];
 
-    // Check one-way constraint for this segment
-    const oneWay = findOneWayForSegment(seg, mapData.oneWayLanes);
+    // Determine one-way constraint:
+    // 1. If this segment IS a one-way lane itself, use its direction
+    // 2. If this segment overlaps a one-way lane, use that lane's direction
+    const explicitLane = isExplicitLane(seg, mapData.oneWayLanes);
+    const overlappingLane = explicitLane ? null : findOverlappingLane(seg, mapData.oneWayLanes);
+    const oneWayLane = explicitLane || overlappingLane;
 
     for (let k = 0; k < chain.length - 1; k++) {
       const fromKey = chain[k].key;
@@ -163,32 +171,20 @@ export function buildGraph(mapData: MapData): Map<string, GraphNode> {
       const toNode = nodeMap.get(toKey)!;
       const w = dist(fromNode.point, toNode.point);
 
-      if (oneWay) {
-        // Determine if the edge direction matches the one-way direction
+      if (oneWayLane) {
         const edgeDir = {
           x: toNode.point.x - fromNode.point.x,
           y: toNode.point.y - fromNode.point.y,
         };
-        let owDir: Point;
-        switch (oneWay.direction) {
-          case '+x': owDir = { x: 1, y: 0 }; break;
-          case '-x': owDir = { x: -1, y: 0 }; break;
-          case '+y': owDir = { x: 0, y: 1 }; break;
-          case '-y': owDir = { x: 0, y: -1 }; break;
-          default: owDir = { x: 1, y: 0 };
-        }
-
+        const owDir = getOneWayDir(oneWayLane);
         const dot = edgeDir.x * owDir.x + edgeDir.y * owDir.y;
 
         if (dot >= 0) {
-          // Forward direction allowed
           addEdge(nodeMap, fromKey, toKey, w, seg, true);
         } else {
-          // Reverse direction allowed
           addEdge(nodeMap, toKey, fromKey, w, seg, true);
         }
       } else {
-        // Bidirectional
         addEdge(nodeMap, fromKey, toKey, w, seg, false);
         addEdge(nodeMap, toKey, fromKey, w, seg, false);
       }
@@ -209,7 +205,6 @@ function addEdge(
   const fromNode = nodeMap.get(fromKey);
   if (!fromNode) return;
 
-  // Avoid duplicate edges
   if (fromNode.edges.some(e => e.to === toKey)) return;
 
   fromNode.edges.push({
@@ -222,7 +217,6 @@ function addEdge(
 }
 
 function findIntersection(seg1: StreetSegment, seg2: StreetSegment): Point | null {
-  // Only handle h/v intersections for simplicity
   if (seg1.orientation === seg2.orientation) return null;
 
   const hSeg = seg1.orientation === 'h' ? seg1 : seg2;

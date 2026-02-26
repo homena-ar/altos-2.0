@@ -8,10 +8,21 @@ import { DebugOverlay } from './DebugOverlay';
 import { RouteOverlay } from './RouteOverlay';
 import { PinOverlay } from './PinOverlay';
 
+const MAP_W = 573.2;
+const MAP_H = 704.1;
+
+/** Extract inner SVG content (everything between the root <svg> and </svg> tags) */
+function extractSvgInner(svgText: string): string {
+  const cleaned = svgText.replace(/ns0:/g, '').replace(/xmlns:ns0/g, 'xmlns');
+  const match = cleaned.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
+  return match ? match[1] : cleaned;
+}
+
 export function MapViewer() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<HTMLDivElement>(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+
+  // ViewBox-based pan/zoom (no CSS transforms → no rasterization)
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: MAP_W, h: MAP_H });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
 
@@ -22,7 +33,7 @@ export function MapViewer() {
     setRoute, setOriginPoint, setDestinationPoint,
     setIsNavigating, setAnimationProgress,
     origin, destinationBlock, destinationHouse, destinationCommerce,
-    commerces, mapLoaded,
+    commerces, mapLoaded, setRouteError,
   } = useStore();
 
   // Load SVG on mount
@@ -50,7 +61,6 @@ export function MapViewer() {
         setOriginPoint(ap.find(a => a.type === 'secondary')?.position ?? null);
         break;
       case 'gps':
-        // GPS position handled externally
         break;
     }
   }, [origin, mapData, setOriginPoint]);
@@ -103,6 +113,7 @@ export function MapViewer() {
   useEffect(() => {
     if (!graph || !originPoint || !destinationPoint) {
       setRoute(null);
+      setRouteError(null);
       return;
     }
 
@@ -111,19 +122,26 @@ export function MapViewer() {
 
     if (!startNode || !endNode) {
       setRoute(null);
+      setRouteError('No se encontraron nodos cercanos al origen o destino.');
       return;
     }
 
     const result = astar(graph, startNode, endNode);
-    setRoute(result);
-  }, [graph, originPoint, destinationPoint, setRoute]);
+    if (result) {
+      setRoute(result);
+      setRouteError(null);
+    } else {
+      setRoute(null);
+      setRouteError('No hay ruta posible entre el origen y el destino.');
+    }
+  }, [graph, originPoint, destinationPoint, setRoute, setRouteError]);
 
   // Animation loop
   useEffect(() => {
     if (!isNavigating || !route) return;
 
     let animId: number;
-    const speed = 0.003; // progress per frame
+    const speed = 0.003;
     let progress = 0;
 
     const animate = () => {
@@ -149,56 +167,58 @@ export function MapViewer() {
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isPanning) return;
-    const dx = e.clientX - lastMouse.x;
-    const dy = e.clientY - lastMouse.y;
-    setTransform(t => ({ ...t, x: t.x + dx, y: t.y + dy }));
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const dx = (e.clientX - lastMouse.x) / rect.width * viewBox.w;
+    const dy = (e.clientY - lastMouse.y) / rect.height * viewBox.h;
+    setViewBox(vb => ({ ...vb, x: vb.x - dx, y: vb.y - dy }));
     setLastMouse({ x: e.clientX, y: e.clientY });
-  }, [isPanning, lastMouse]);
+  }, [isPanning, lastMouse, viewBox]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
   }, []);
 
-  // Zoom handler
+  // Zoom handler (viewBox based - stays vector at all zoom levels)
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const container = containerRef.current;
     if (!container) return;
 
+    const factor = e.deltaY > 0 ? 1.1 : 0.9;
     const rect = container.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    const mx = (e.clientX - rect.left) / rect.width;
+    const my = (e.clientY - rect.top) / rect.height;
 
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.3, Math.min(10, transform.scale * delta));
-
-    // Zoom toward mouse position
-    const scaleRatio = newScale / transform.scale;
-    const newX = mouseX - (mouseX - transform.x) * scaleRatio;
-    const newY = mouseY - (mouseY - transform.y) * scaleRatio;
-
-    setTransform({ x: newX, y: newY, scale: newScale });
-  }, [transform]);
+    setViewBox(vb => {
+      const newW = Math.max(50, Math.min(MAP_W * 3, vb.w * factor));
+      const newH = Math.max(50, Math.min(MAP_H * 3, vb.h * factor));
+      const newX = vb.x + mx * (vb.w - newW);
+      const newY = vb.y + my * (vb.h - newH);
+      return { x: newX, y: newY, w: newW, h: newH };
+    });
+  }, []);
 
   // Touch handlers for mobile
   const [lastTouches, setLastTouches] = useState<React.Touch[]>([]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const touches = Array.from(e.touches);
-    setLastTouches(touches);
+    setLastTouches(Array.from(e.touches));
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
     const touches = Array.from(e.touches);
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
 
     if (touches.length === 1 && lastTouches.length === 1) {
-      // Pan
-      const dx = touches[0].clientX - lastTouches[0].clientX;
-      const dy = touches[0].clientY - lastTouches[0].clientY;
-      setTransform(t => ({ ...t, x: t.x + dx, y: t.y + dy }));
+      const dx = (touches[0].clientX - lastTouches[0].clientX) / rect.width * viewBox.w;
+      const dy = (touches[0].clientY - lastTouches[0].clientY) / rect.height * viewBox.h;
+      setViewBox(vb => ({ ...vb, x: vb.x - dx, y: vb.y - dy }));
     } else if (touches.length === 2 && lastTouches.length === 2) {
-      // Pinch zoom
       const prevDist = Math.sqrt(
         (lastTouches[0].clientX - lastTouches[1].clientX) ** 2 +
         (lastTouches[0].clientY - lastTouches[1].clientY) ** 2
@@ -208,33 +228,24 @@ export function MapViewer() {
         (touches[0].clientY - touches[1].clientY) ** 2
       );
 
-      const delta = currDist / prevDist;
-      const newScale = Math.max(0.3, Math.min(10, transform.scale * delta));
+      const factor = prevDist / currDist;
+      const midX = ((touches[0].clientX + touches[1].clientX) / 2 - rect.left) / rect.width;
+      const midY = ((touches[0].clientY + touches[1].clientY) / 2 - rect.top) / rect.height;
 
-      const midX = (touches[0].clientX + touches[1].clientX) / 2;
-      const midY = (touches[0].clientY + touches[1].clientY) / 2;
-
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const px = midX - rect.left;
-        const py = midY - rect.top;
-        const scaleRatio = newScale / transform.scale;
-        const newX = px - (px - transform.x) * scaleRatio;
-        const newY = py - (py - transform.y) * scaleRatio;
-        setTransform({ x: newX, y: newY, scale: newScale });
-      }
+      setViewBox(vb => {
+        const newW = Math.max(50, Math.min(MAP_W * 3, vb.w * factor));
+        const newH = Math.max(50, Math.min(MAP_H * 3, vb.h * factor));
+        const newX = vb.x + midX * (vb.w - newW);
+        const newY = vb.y + midY * (vb.h - newH);
+        return { x: newX, y: newY, w: newW, h: newH };
+      });
     }
 
     setLastTouches(touches);
-  }, [lastTouches, transform]);
+  }, [lastTouches, viewBox]);
 
-  // Process SVG for display (fix ns0: prefix)
-  const displaySvg = svgContent
-    ? svgContent
-        .replace(/ns0:/g, '')
-        .replace(/xmlns:ns0/g, 'xmlns')
-    : '';
+  // Extract inner SVG content (strip outer <svg> tag)
+  const svgInner = svgContent ? extractSvgInner(svgContent) : '';
 
   if (!mapLoaded) {
     return (
@@ -258,51 +269,49 @@ export function MapViewer() {
       onTouchMove={handleTouchMove}
       onTouchEnd={() => setLastTouches([])}
     >
-      <div
-        ref={svgRef}
-        className="map-svg-wrapper"
-        style={{
-          transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-          transformOrigin: '0 0',
-        }}
+      {/* Single inline SVG — stays vector at all zoom levels */}
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block' }}
       >
-        <div
-          className="map-svg"
-          dangerouslySetInnerHTML={{ __html: displaySvg }}
-        />
+        {/* Base map (inner content of mapa.svg) */}
+        <g dangerouslySetInnerHTML={{ __html: svgInner }} />
 
-        {/* Overlays rendered on top of SVG */}
-        <svg
-          className="map-overlay-svg"
-          viewBox={mapData ? `0 0 ${mapData.viewBox.width} ${mapData.viewBox.height}` : '0 0 573.2 704.1'}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-        >
-          {debugMode && graph && mapData && (
-            <DebugOverlay graph={graph} mapData={mapData} />
-          )}
+        {/* Overlays in same SVG coordinate space */}
+        {debugMode && graph && mapData && (
+          <DebugOverlay graph={graph} mapData={mapData} />
+        )}
 
-          {route && (
-            <RouteOverlay
-              route={route}
-              animationProgress={animationProgress}
-            />
-          )}
+        {route && (
+          <RouteOverlay
+            route={route}
+            animationProgress={animationProgress}
+          />
+        )}
 
-          {originPoint && (
-            <PinOverlay point={originPoint} color="#22c55e" label="A" />
-          )}
+        {originPoint && (
+          <PinOverlay point={originPoint} color="#22c55e" label="A" />
+        )}
 
-          {destinationPoint && (
-            <PinOverlay point={destinationPoint} color="#ef4444" label="B" />
-          )}
-        </svg>
-      </div>
+        {destinationPoint && (
+          <PinOverlay point={destinationPoint} color="#ef4444" label="B" />
+        )}
+      </svg>
 
       {/* Zoom controls */}
       <div className="zoom-controls">
-        <button onClick={() => setTransform(t => ({ ...t, scale: Math.min(10, t.scale * 1.3) }))}>+</button>
-        <button onClick={() => setTransform(t => ({ ...t, scale: Math.max(0.3, t.scale / 1.3) }))}>-</button>
-        <button onClick={() => setTransform({ x: 0, y: 0, scale: 1 })}>Fit</button>
+        <button onClick={() => setViewBox(vb => {
+          const nw = vb.w / 1.3, nh = vb.h / 1.3;
+          return { x: vb.x + (vb.w - nw) / 2, y: vb.y + (vb.h - nh) / 2, w: nw, h: nh };
+        })}>+</button>
+        <button onClick={() => setViewBox(vb => {
+          const nw = Math.min(MAP_W * 3, vb.w * 1.3), nh = Math.min(MAP_H * 3, vb.h * 1.3);
+          return { x: vb.x - (nw - vb.w) / 2, y: vb.y - (nh - vb.h) / 2, w: nw, h: nh };
+        })}>-</button>
+        <button onClick={() => setViewBox({ x: 0, y: 0, w: MAP_W, h: MAP_H })}>Fit</button>
       </div>
     </div>
   );
